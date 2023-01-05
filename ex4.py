@@ -22,7 +22,7 @@ def import_data():
     all_words = all_tagged_words[:, 0]
     number_of_words = len(all_words)
     all_tags = all_tagged_words[:, 1]
-    d = build_tuple_index_map(set(all_words[:100]), set(all_tags[:100]))
+    d = build_tuple_index_map(set(all_words), set(all_tags))
 
     s_len = len(all_sentences)
     train_percent_index = int(0.9 * s_len)
