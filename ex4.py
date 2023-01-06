@@ -7,6 +7,9 @@ from networkx import DiGraph, maximum_spanning_arborescence
 nltk.download('dependency_treebank')
 from nltk.corpus import dependency_treebank
 
+DIST = {}
+DIST_i = {}
+
 
 class Arc:
     def __init__(self, head, tail, weight):
@@ -20,12 +23,12 @@ def import_data():
 
     all_tagged_words = np.array([w_t for w_t in dependency_treebank.tagged_words()] + [("ROOT", "ROOT")])
     all_words = all_tagged_words[:, 0]
-    number_of_words = len(all_words)
+    number_of_words = len(set(all_words))
     all_tags = all_tagged_words[:, 1]
-    d = build_tuple_index_map(set(all_words), set(all_tags))
 
     s_len = len(all_sentences)
     train_percent_index = int(0.9 * s_len)
+    d = build_tuple_index_map(set(all_words[:100]), set(all_tags[:100]))
     train_set, test_set = all_sentences[:train_percent_index], all_sentences[train_percent_index:]
     return train_set, test_set, d, number_of_words
 
@@ -62,8 +65,6 @@ def subtract_maps(current_tree_map, max_tree_map):
     for k, v in max_tree_map.items():
         if k in current_tree_map.keys():
             max_tree_map[k] -= current_tree_map[k]
-        # else:
-        #     max_tree_map[k] = v
     for k, v in current_tree_map.items():
         if k not in max_tree_map.keys():
             max_tree_map[k] = -v
@@ -99,7 +100,9 @@ def create_all_arcs(sentence, theta, d):
     arcs = []
     for head, rel, tail in sentence.triples():
         word_bigram_index, tag_bigram_index = feature_function(head, tail, d)
-        weight = theta[word_bigram_index] + theta[tag_bigram_index]
+        weight_word, weight_tag = theta[word_bigram_index] if word_bigram_index >= 0 else 0, theta[
+            tag_bigram_index] if tag_bigram_index >= 0 else 0
+        weight = weight_word + weight_tag
         current_arc = Arc(head, tail, weight)
         arcs.append(current_arc)
     return arcs
@@ -143,7 +146,6 @@ def perceptron_algorithm(iterations, sentences, d, learning_rate):
                 gradient = get_gradient(max_tree, arcs, d)
                 weight_vector = np.array(update_weight(weight_vector, learning_rate, gradient))
                 weights_sum += weight_vector
-            print(f"Epoch: {r + 1}, Iteration: {i_s + 1}")
     return weights_sum / (iterations * N)
 
 
@@ -151,13 +153,13 @@ def get_sentence_tuples(s):
     sentence_tuples = []
     for head, rel, dep in s.triples():
         sentence_tuples.append((head[0], dep[0]))
-    return sentence_tuples
+    return set(sentence_tuples)
 
 
-def evaluation(test_set, theta, d, number_of_words):
+def evaluation(test_set, theta, d, number_of_words, create_all_arcs_f):
     correct_edges_counter = 0
     for s in test_set:
-        arcs = create_all_arcs(s, theta, d)
+        arcs = create_all_arcs_f(s, theta, d)
         if len(arcs) > 0:
             mst = max_spanning_arborescence_nx(arcs, 0)
             current_word_tuples = get_sentence_tuples(s)
@@ -171,5 +173,5 @@ def evaluation(test_set, theta, d, number_of_words):
 
 train_set, test_set, d, number_of_words = import_data()
 theta = perceptron_algorithm(2, train_set, d, 1)
-accuracy = evaluation(test_set, theta, d, number_of_words)
+accuracy = evaluation(test_set, theta, d, number_of_words, create_all_arcs)
 print(accuracy)
